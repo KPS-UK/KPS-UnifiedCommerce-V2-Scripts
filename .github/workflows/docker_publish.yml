@@ -1,0 +1,66 @@
+name: Update Docker (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+      gcp-project:
+        required: true
+        type: string
+
+      wif-provider:
+        required: true
+        type: string
+
+      service-account:
+        required: true
+        type: string
+
+      artifact-registry-region:
+        required: false
+        type: string
+        default: "europe-west1"
+
+      extension-name:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ inputs.wif-provider }}
+          service_account: ${{ inputs.service-account }}
+          project_id: ${{ inputs.gcp-project }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker to use gcloud as credential helper
+        shell: bash
+        run: gcloud auth configure-docker ${{ inputs.artifact-registry-region }}-docker.pkg.dev --quiet
+
+      - name: Bump version
+        run: |
+          npm version ${{ inputs.version }} --no-git-tag-version
+
+      - name: Run publish script
+        run: |
+          ./scripts/publishDocker.sh --extension=${{ inputs.extension-name }} --version=${{ inputs.version }} --region=${{ inputs.artifact-registry-region }} --project=${{ inputs.gcp-project }}

@@ -1,0 +1,94 @@
+name: Test & Coverage
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        required: false
+        type: string
+        default: "18"
+
+      version:
+        required: true
+        type: string
+
+      gcp-project:
+        required: true
+        type: string
+
+      wif-provider:
+        required: true
+        type: string
+
+      service-account:
+        required: true
+        type: string
+
+jobs:
+  test:
+    name: Jest Tests & Coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ inputs.wif-provider }}
+          service_account: ${{ inputs.service-account }}
+          project_id: ${{ inputs.gcp-project }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install Dependencies
+        run: |
+          ./scripts/authenticate.sh
+          npm install
+
+      - name: Run tests with coverage
+        id: test
+        env:
+          JEST_JUNIT_OUTPUT_DIR: reports
+          JEST_JUNIT_OUTPUT_NAME: junit.xml
+        run: |
+          npm run test:coverage -- \
+            --coverageReporters=json-summary \
+            --reporters=default \
+            --reporters=jest-junit
+        continue-on-error: true
+
+      - name: Publish test results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: Jest Tests
+          path: reports/junit.xml
+          reporter: jest-junit
+
+      - name: Publish coverage to PR
+        if: github.event_name == 'pull_request'
+        uses: MishaKav/jest-coverage-comment@v1.0.30
+        with:
+          coverage-summary-path: coverage/coverage-summary.json
+          junitxml-path: reports/junit.xml
+          title: Coverage Report
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail if tests failed
+        if: steps.test.outcome == 'failure'
+        run: exit 1

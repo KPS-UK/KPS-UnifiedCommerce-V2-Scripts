@@ -18,9 +18,11 @@ fi
 EXTENSION_NAME="uc-$EXTENSION"
 
 if command -v docker &> /dev/null; then
-  RUNTIME="docker buildx"
+  BUILD_CMD="docker buildx"
+  PUSH_CMD="docker"
 elif command -v podman &> /dev/null; then
-  RUNTIME=podman
+  BUILD_CMD="podman"
+  PUSH_CMD="podman"
 else
   echo "Error: neither docker nor podman found"
   exit 1
@@ -30,11 +32,11 @@ SCRIPT_DIR=$(dirname "$0")
 VERSION=$(node -p "require('./package.json').version")
 IMAGE_BASE="europe-west2-docker.pkg.dev/kps-unified-commerce/kps-connect/$EXTENSION_NAME"
 
-$RUNTIME build --platform linux/amd64 -f "$SCRIPT_DIR/Dockerfile" \
+$BUILD_CMD build --platform linux/amd64 -f "$SCRIPT_DIR/Dockerfile" \
   -t "$IMAGE_BASE:latest" \
   -t "$IMAGE_BASE:$VERSION" \
   --build-arg NPM_TOKEN=$(gcloud auth print-access-token) .
 if [ "$BUILD_ONLY" = false ]; then
-  $RUNTIME push "$IMAGE_BASE:latest"
-  $RUNTIME push "$IMAGE_BASE:$VERSION"
+  $PUSH_CMD push "$IMAGE_BASE:latest"
+  $PUSH_CMD push "$IMAGE_BASE:$VERSION"
 fi

@@ -22,7 +22,7 @@ on:
       artifact-registry-region:
         required: false
         type: string
-        default: "europe-west1"
+        default: "europe-west2"
 
       extension-name:
         required: true
